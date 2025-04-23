@@ -3,6 +3,10 @@ struct ProposalInit {
     proposalId: Int as uint32;
 }
 
+message ProposalTime {
+    votingEndingAt: Int as uint32;
+}
+
 message DeployNewProposal {
     votingEndingAt: Int as uint32;
 }
@@ -20,22 +24,16 @@ contract ProposalMaster {
             throw(132);
         }
 
-        let init: StateInit = initOf Proposal(ProposalInit{master: myAddress(), proposalId: self.nextProp});
-        let address: Address = contractAddress(init);
-
         dump("ProposalMaster: deploying Proposal");
         
-        deploy(DeployParameters{
-            init: init,
-            value: 0,              
+        let init: StateInit = initOf Proposal(ProposalInit{master: myAddress(), proposalId: self.nextProp});
+        send(SendParameters{
+            to: contractAddress(init),
+            body: ProposalTime{votingEndingAt: msg.votingEndingAt}.toCell(),
+            value: ton("0.1"),              
             mode: SendIgnoreErrors,
-        });
-
-        message(MessageParameters   {
-            to: address,
-            value: 0,              
-            mode: SendIgnoreErrors,
-            body: msg.toCell(),
+            code: init.code,            
+            data: init.data
         });
 
         dump("ProposalMaster: Proposal deployed");
@@ -81,7 +79,7 @@ contract Proposal {
         dump("Proposal: inited");
     }
 
-    receive(msg: DeployNewProposal) {
+    receive(msg: ProposalTime) {
         dump("Proposal: DeployNewProposal received");
         if (sender() != self.ps.master) {
             dump("Proposal: invalid sender, throwing 2025");
