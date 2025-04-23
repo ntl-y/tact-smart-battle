@@ -14,21 +14,34 @@ contract ProposalMaster {
 
     receive(msg: DeployNewProposal) {
         // TODO: implement
+        dump("ProposalMaster: DeployNewProposal received");
         if (now() >= msg.votingEndingAt){
+            dump("ProposalMaster: deadline passed, throwing");
             throw(132);
         }
 
-        let init: StateInit = initOf Proposal(ProposalInit{master: myAddress(), proposalId: self.nextProp}, msg.votingEndingAt);
+        let init: StateInit = initOf Proposal(ProposalInit{master: myAddress(), proposalId: self.nextProp});
         let address: Address = contractAddress(init);
-        send(SendParameters{
+
+        dump("ProposalMaster: deploying Proposal");
+        
+        deploy(DeployParameters{
+            init: init,
+            value: 0,              
+            mode: SendIgnoreErrors,
+        });
+
+        message(MessageParameters   {
             to: address,
             value: 0,              
             mode: SendIgnoreErrors,
-            code: init.code,                
-            data: init.data, 
+            body: msg.toCell(),
         });
 
+        dump("ProposalMaster: Proposal deployed");
+
         self.nextProp += 1;
+        dump("ProposalMaster: nextProp incremented");
     }
 
     get fun nextProposalId(): Int {
@@ -53,49 +66,66 @@ struct ProposalState {
 
 contract Proposal {
     ps: ProposalState;
-    arradr: map<Address, Bool>;
     val: Int as uint8 = 0;
 
-    init(data: ProposalInit, time: Int) {
+    init(data: ProposalInit) {
         // TODO: implement
+        dump("Proposal: initing");
         self.ps = ProposalState{
             yesCount: 0,
             noCount: 0,
             master: data.master,
             proposalId: data.proposalId,
-            votingEndingAt: v,
+            votingEndingAt: 0,
         };
+        dump("Proposal: inited");
+    }
+
+    receive(msg: DeployNewProposal) {
+        dump("Proposal: DeployNewProposal received");
+        if (sender() != self.ps.master) {
+            dump("Proposal: invalid sender, throwing 2025");
+            throw(2025); 
+        }
+
+        if (self.ps.votingEndingAt != 0) {
+            dump("Proposal: already initialized, throwing 132");
+            throw(132);
+        }
+
+        dump("Setting votingEndingAt");
+        self.ps.votingEndingAt = msg.votingEndingAt;
+        dump("VotingEndingAt setted");
     }
 
     receive(msg: Vote) {
         // TODO: implement
-        if (now() >= self.ps.votingEndingAt){
-            throw(132);
-        }
-        if (self.val >= 100) {
+        dump("Proposal: Vote received");
+        dump(msg.value);
+
+        if (self.ps.votingEndingAt == 0){
+            dump("Proposal: votingEndingAt not set, throwing 132");
             throw(132);
         }
 
-        let senderctx: Address = sender();
-        let flag: Bool? = self.arradr.get(senderctx);
-        if (flag != null){
+        if (now() >= self.ps.votingEndingAt){
+            dump("Proposal: voting closed, throwing 132");
+            throw(132);
+        }
+        if (self.val >= 100) {
+            dump("Proposal: vote limit reached, throwing 132");
             throw(132);
         }
 
         if (msg.value == true){
             self.ps.yesCount += 1;
+            self.val += 1;
+            dump("Proposal: counted YES vote");
         } else if (msg.value == false){
             self.ps.noCount += 1;
+            self.val += 1;
+            dump("Proposal: counted NO vote");
         }
-
-        self.arradr.set(senderctx, true);
-        self.val += 1;
-        send(SendParameters{
-            to: senderctx,
-            bounce: true,
-            value: 0,
-            mode: SendRemainingValue,
-        });
     }
 
     get fun proposalState(): ProposalState {

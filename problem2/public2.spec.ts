@@ -3,10 +3,10 @@ import { Blockchain } from '@ton/sandbox';
 import { toNano } from '@ton/core';
 import { Proposal } from '../output/solution2_Proposal';
 import { ProposalMaster } from '../output/solution2_ProposalMaster';
+import { CompilerConfig } from '@ton/blueprint';
 
 it('solution2', async () => {
     const blockchain = await Blockchain.create();
-
     // init master contract
     const proposalMaster = blockchain.openContract(
         await ProposalMaster.fromInit(),
@@ -45,6 +45,7 @@ it('solution2', async () => {
             proposalId: 0n,
         }),
     );
+    
     await proposal.send(
         voter.getSender(),
         { value: toNano('0.1') },
