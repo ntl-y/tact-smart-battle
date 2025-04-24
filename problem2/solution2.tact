@@ -3,52 +3,35 @@ struct ProposalInit {
     proposalId: Int as uint32;
 }
 
-message ProposalTime {
-    votingEndingAt: Int as uint32;
-}
-
 message DeployNewProposal {
     votingEndingAt: Int as uint32;
 }
 
 contract ProposalMaster {
-    nextProp: Int as uint8 = 0;
-    // deploy
+    nextProp: Int as uint32 = 0;
     receive() { }
 
     receive(msg: DeployNewProposal) {
-        // TODO: implement
-        dump("ProposalMaster: DeployNewProposal received");
         if (now() >= msg.votingEndingAt){
-            dump("ProposalMaster: deadline passed, throwing");
             throw(132);
         }
-
-        dump("ProposalMaster: deploying Proposal");
-        
+      
         let init: StateInit = initOf Proposal(ProposalInit{master: myAddress(), proposalId: self.nextProp});
         send(SendParameters{
             to: contractAddress(init),
-            body: ProposalTime{votingEndingAt: msg.votingEndingAt}.toCell(),
-            value: ton("0.1"),              
+            body: msg.toCell(),
+            value: ton("0.05"),              
             mode: SendIgnoreErrors,
             code: init.code,            
             data: init.data
         });
-
-        dump("ProposalMaster: Proposal deployed");
-
         self.nextProp += 1;
-        dump("ProposalMaster: nextProp incremented");
     }
 
     get fun nextProposalId(): Int {
-        // TODO: implement
         return self.nextProp;
     }
 }
-
-// ==============================================================================
 
 message Vote {
     value: Bool;
@@ -64,11 +47,14 @@ struct ProposalState {
 
 contract Proposal {
     ps: ProposalState;
-    val: Int as uint8 = 0;
+    val: Int as uint32 = 0;    
+    arradr: map<Address, Bool>;
+
 
     init(data: ProposalInit) {
-        // TODO: implement
-        dump("Proposal: initing");
+        if (sender() != data.master){
+            throw(2025);
+        }
         self.ps = ProposalState{
             yesCount: 0,
             noCount: 0,
@@ -76,58 +62,49 @@ contract Proposal {
             proposalId: data.proposalId,
             votingEndingAt: 0,
         };
-        dump("Proposal: inited");
     }
 
-    receive(msg: ProposalTime) {
-        dump("Proposal: DeployNewProposal received");
-        if (sender() != self.ps.master) {
-            dump("Proposal: invalid sender, throwing 2025");
-            throw(2025); 
+    receive(msg: DeployNewProposal) {
+        if (sender() != self.ps.master){
+            throw(2025);
         }
-
         if (self.ps.votingEndingAt != 0) {
-            dump("Proposal: already initialized, throwing 132");
             throw(132);
         }
-
-        dump("Setting votingEndingAt");
         self.ps.votingEndingAt = msg.votingEndingAt;
-        dump("VotingEndingAt setted");
     }
 
     receive(msg: Vote) {
-        // TODO: implement
-        dump("Proposal: Vote received");
-        dump(msg.value);
+        let senderctx: Address = sender();
+        let flag: Bool? = self.arradr.get(senderctx);
+        if (flag != null){
+            throw(132);
+        }
 
         if (self.ps.votingEndingAt == 0){
-            dump("Proposal: votingEndingAt not set, throwing 132");
             throw(132);
         }
 
         if (now() >= self.ps.votingEndingAt){
-            dump("Proposal: voting closed, throwing 132");
             throw(132);
         }
         if (self.val >= 100) {
-            dump("Proposal: vote limit reached, throwing 132");
             throw(132);
         }
-
         if (msg.value == true){
             self.ps.yesCount += 1;
             self.val += 1;
-            dump("Proposal: counted YES vote");
+            self.arradr.set(senderctx, true);
         } else if (msg.value == false){
             self.ps.noCount += 1;
             self.val += 1;
-            dump("Proposal: counted NO vote");
+            self.arradr.set(senderctx, true);
+        } else {
+            throw(134);
         }
     }
 
     get fun proposalState(): ProposalState {
-        // TODO: implement
         return self.ps;
     }
 }
