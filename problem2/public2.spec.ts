@@ -3,7 +3,6 @@ import { Blockchain } from '@ton/sandbox';
 import { toNano } from '@ton/core';
 import { Proposal } from '../output/solution2_Proposal';
 import { ProposalMaster } from '../output/solution2_ProposalMaster';
-import { CompilerConfig } from '@ton/blueprint';
 
 it('solution2', async () => {
     const blockchain = await Blockchain.create();
